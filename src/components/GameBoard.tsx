@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Player, GameState as GameStatusType } from '@/lib/types';
@@ -6,10 +7,12 @@ import { Scoreboard } from './Scoreboard';
 import { RoundScoreForm } from './RoundScoreForm';
 import { StopAdvisorDialog } from './StopAdvisorDialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { calculateNewTotalScore, applyStopBonusesAndPenalties } from '@/lib/game-logic';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Hand, Brain, RotateCcw, PartyPopper, Users, CheckSquare } from 'lucide-react';
+import { Hand, Brain, RotateCcw, PartyPopper, Users, CheckSquare, Layers } from 'lucide-react';
 
 interface GameBoardProps {
   initialPlayers: Player[];
@@ -21,6 +24,8 @@ export function GameBoard({ initialPlayers, onNewGame }: GameBoardProps) {
   const [currentRound, setCurrentRound] = useState(1);
   const [gameStatus, setGameStatus] = useState<GameStatusType>('playing');
   const [stopperId, setStopperId] = useState<string | null>(null);
+  const [cardsRemainingInDeck, setCardsRemainingInDeck] = useState(0);
+  const [cardsInDiscardPile, setCardsInDiscardPile] = useState(0);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -28,16 +33,25 @@ export function GameBoard({ initialPlayers, onNewGame }: GameBoardProps) {
     setCurrentRound(1);
     setGameStatus('playing');
     setStopperId(null);
+
+    const numPlayers = initialPlayers.length;
+    if (numPlayers > 0) {
+      const initialDeckSize = 108; // Typically 2 decks (52 cards each) + 4 jokers
+      const cardsDealtPerPlayer = 11; // Common dealing for Sixes
+      const remainingInDeck = initialDeckSize - (numPlayers * cardsDealtPerPlayer);
+      setCardsRemainingInDeck(remainingInDeck > 0 ? remainingInDeck : 0);
+      setCardsInDiscardPile(0); 
+    }
+
   }, [initialPlayers]);
 
 
   const handleScoresSubmit = (roundScores: Record<string, number>) => {
     const updatedPlayers = players.map(player => {
       const scoreForRound = roundScores[player.id];
-      if (scoreForRound === undefined) return player; // Should not happen if form validates
+      if (scoreForRound === undefined) return player; 
 
       const newScoresByRound = [...player.scoresByRound, scoreForRound];
-      // Calculate total score iteratively applying 50 point rule
       let updatedTotalScore = 0;
       newScoresByRound.forEach(rs => {
         updatedTotalScore = calculateNewTotalScore(updatedTotalScore, rs);
@@ -54,7 +68,6 @@ export function GameBoard({ initialPlayers, onNewGame }: GameBoardProps) {
       const finalPlayersWithBonuses = applyStopBonusesAndPenalties(updatedPlayers, stopperId);
       setPlayers(finalPlayersWithBonuses);
       setGameStatus('game_over');
-      // Determine winner
       const winner = finalPlayersWithBonuses.reduce((prev, curr) => (curr.totalScore < prev.totalScore ? curr : prev));
       toast({
         title: "Game Over!",
@@ -118,6 +131,38 @@ export function GameBoard({ initialPlayers, onNewGame }: GameBoardProps) {
     <div className="space-y-8">
       <Scoreboard players={players} currentRound={currentRound} />
 
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-2xl flex items-center">
+            <Layers className="mr-2 h-7 w-7 text-primary" />
+            Deck & Discard Status
+          </CardTitle>
+          <CardDescription>Track the cards in play. This information is used by the AI Advisor.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-1">
+            <Label htmlFor="cardsRemainingInDeck" className="font-medium">Cards Remaining in Deck</Label>
+            <Input
+              id="cardsRemainingInDeck"
+              type="number"
+              value={cardsRemainingInDeck}
+              onChange={(e) => setCardsRemainingInDeck(Math.max(0, parseInt(e.target.value, 10) || 0))}
+              className="text-base h-12"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="cardsInDiscardPile" className="font-medium">Cards in Discard Pile</Label>
+            <Input
+              id="cardsInDiscardPile"
+              type="number"
+              value={cardsInDiscardPile}
+              onChange={(e) => setCardsInDiscardPile(Math.max(0, parseInt(e.target.value, 10) || 0))}
+              className="text-base h-12"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {gameStatus !== 'game_over' && (
         <RoundScoreForm
           players={players}
@@ -148,7 +193,9 @@ export function GameBoard({ initialPlayers, onNewGame }: GameBoardProps) {
                 </Button>
                 <StopAdvisorDialog 
                   currentPlayer={player} 
-                  otherPlayers={getOtherPlayers(player.id)} 
+                  otherPlayers={getOtherPlayers(player.id)}
+                  cardsRemainingInDeck={cardsRemainingInDeck}
+                  cardsInDiscardPile={cardsInDiscardPile}
                   triggerButton={
                      <Button variant="outline" className="flex-grow">
                         <Brain className="mr-2 h-4 w-4" /> AI Advice

@@ -10,7 +10,12 @@ export interface Player {
 
 export type GameState = 'setup' | 'playing' | 'final_round' | 'game_over';
 
-// Optional fields for AI advice input in dialog
-export type AIAdviceDialogInput = Pick<StopAdviceInput, 'cardsRemainingInDeck' | 'cardsInDiscardPile'> & {
+// State for the form within the StopAdvisorDialog
+export interface StopAdvisorDialogFormState {
   myEstimatedScore?: number; // Optional, can be pre-filled
-};
+}
+
+// This type was previously AIAdviceDialogInput and included deck/discard counts.
+// Those are now managed in GameBoard and passed as props to StopAdvisorDialog.
+// Retaining a similar structure for what the dialog itself manages internally for its form.
+export type AIAdviceDialogInput = StopAdvisorDialogFormState;

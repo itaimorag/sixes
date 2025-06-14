@@ -1,8 +1,9 @@
+
 "use client";
 
-import type { AIAdviceDialogInput, Player } from '@/lib/types';
+import type { Player, StopAdvisorDialogFormState } from '@/lib/types'; // Updated type import
 import { getStopAdvice, type StopAdviceOutput, type StopAdviceInput } from '@/ai/flows/stop-advisor';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,29 +17,43 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Brain, AlertTriangle, Lightbulb, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Brain, Lightbulb, ThumbsUp, ThumbsDown } from 'lucide-react'; // Removed AlertTriangle
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface StopAdvisorDialogProps {
   currentPlayer: Player;
   otherPlayers: Player[];
-  triggerButton?: React.ReactNode; // Optional custom trigger
+  cardsRemainingInDeck: number; // New prop
+  cardsInDiscardPile: number;   // New prop
+  triggerButton?: React.ReactNode; 
 }
 
-export function StopAdvisorDialog({ currentPlayer, otherPlayers, triggerButton }: StopAdvisorDialogProps) {
+export function StopAdvisorDialog({ 
+  currentPlayer, 
+  otherPlayers, 
+  cardsRemainingInDeck, 
+  cardsInDiscardPile, 
+  triggerButton 
+}: StopAdvisorDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [advice, setAdvice] = useState<StopAdviceOutput | null>(null);
-  const [aiInput, setAiInput] = useState<AIAdviceDialogInput>({
-    cardsRemainingInDeck: 26, // Default sensible value
-    cardsInDiscardPile: 0,   // Default sensible value
+  // State now only for fields managed purely within this dialog's form
+  const [dialogFormState, setDialogFormState] = useState<StopAdvisorDialogFormState>({
     myEstimatedScore: currentPlayer.totalScore,
   });
   const { toast } = useToast();
 
+  // Update estimated score if currentPlayer.totalScore changes while dialog is closed
+  useEffect(() => {
+    if (!isOpen) {
+      setDialogFormState({ myEstimatedScore: currentPlayer.totalScore });
+    }
+  }, [currentPlayer.totalScore, isOpen]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setAiInput(prev => ({ ...prev, [name]: parseInt(value, 10) || 0 }));
+    const { name, value } = e.target; // name will be 'myEstimatedScore'
+    setDialogFormState(prev => ({ ...prev, [name]: parseInt(value, 10) || 0 }));
   };
 
   const handleSubmit = async () => {
@@ -46,10 +61,10 @@ export function StopAdvisorDialog({ currentPlayer, otherPlayers, triggerButton }
     setAdvice(null);
     try {
       const fullStopAdviceInput: StopAdviceInput = {
-        myEstimatedScore: aiInput.myEstimatedScore ?? currentPlayer.totalScore,
+        myEstimatedScore: dialogFormState.myEstimatedScore ?? currentPlayer.totalScore,
         opponentScores: otherPlayers.map(p => p.totalScore),
-        cardsRemainingInDeck: aiInput.cardsRemainingInDeck,
-        cardsInDiscardPile: aiInput.cardsInDiscardPile,
+        cardsRemainingInDeck: cardsRemainingInDeck, // Use prop
+        cardsInDiscardPile: cardsInDiscardPile,   // Use prop
       };
       const result = await getStopAdvice(fullStopAdviceInput);
       setAdvice(result);
@@ -71,15 +86,14 @@ export function StopAdvisorDialog({ currentPlayer, otherPlayers, triggerButton }
     </Button>
   );
   
-  // Reset form when dialog opens/closes
   const onOpenChange = (open: boolean) => {
     setIsOpen(open);
     if(open) {
-      setAdvice(null);
-      setAiInput(prev => ({...prev, myEstimatedScore: currentPlayer.totalScore }));
+      setAdvice(null); // Clear previous advice
+      // Reset estimated score to current player's total score when dialog opens
+      setDialogFormState({ myEstimatedScore: currentPlayer.totalScore }); 
     }
   }
-
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -92,8 +106,9 @@ export function StopAdvisorDialog({ currentPlayer, otherPlayers, triggerButton }
             <Lightbulb className="mr-2 h-6 w-6 text-primary" /> AI Stop Advisor
           </DialogTitle>
           <DialogDescription className="font-body">
-            Get advice on whether to call "STOP" based on the current game state.
-            Your current total score is {currentPlayer.totalScore}.
+            Get advice on whether to call "STOP".
+            Your current total score is {currentPlayer.totalScore}. 
+            Deck: {cardsRemainingInDeck}, Discard: {cardsInDiscardPile}.
           </DialogDescription>
         </DialogHeader>
         
@@ -103,39 +118,19 @@ export function StopAdvisorDialog({ currentPlayer, otherPlayers, triggerButton }
               <Label htmlFor="myEstimatedScore">Your Estimated Score (if you stop now)</Label>
               <Input
                 id="myEstimatedScore"
-                name="myEstimatedScore"
+                name="myEstimatedScore" // Ensure name matches the key in dialogFormState
                 type="number"
-                value={aiInput.myEstimatedScore}
+                value={dialogFormState.myEstimatedScore}
                 onChange={handleInputChange}
                 className="text-base"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="cardsRemainingInDeck">Cards Remaining in Deck</Label>
-              <Input
-                id="cardsRemainingInDeck"
-                name="cardsRemainingInDeck"
-                type="number"
-                value={aiInput.cardsRemainingInDeck}
-                onChange={handleInputChange}
-                className="text-base"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cardsInDiscardPile">Cards in Discard Pile</Label>
-              <Input
-                id="cardsInDiscardPile"
-                name="cardsInDiscardPile"
-                type="number"
-                value={aiInput.cardsInDiscardPile}
-                onChange={handleInputChange}
-                className="text-base"
-              />
-            </div>
+            {/* Input fields for cardsRemainingInDeck and cardsInDiscardPile are removed 
+                as they are now passed as props and managed in GameBoard.tsx */}
           </div>
         )}
 
-        {isLoading && <p className="text-center py-4">Getting advice...</p>}
+        {isLoading && <p className="text-center py-4 text-muted-foreground">Getting advice...</p>}
 
         {advice && (
           <Card className="my-4 bg-background shadow-inner">
