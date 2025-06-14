@@ -3,6 +3,7 @@
 
 import type { Player, GameState as GameStatusType } from '@/lib/types';
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Scoreboard } from './Scoreboard';
 import { RoundScoreForm } from './RoundScoreForm';
 import { StopAdvisorDialog } from './StopAdvisorDialog';
@@ -12,11 +13,47 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { calculateNewTotalScore, applyStopBonusesAndPenalties } from '@/lib/game-logic';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Hand, Brain, RotateCcw, PartyPopper, Users, CheckSquare, Layers } from 'lucide-react';
+import { Hand, Brain, RotateCcw, PartyPopper, Users, CheckSquare, Layers, Shuffle } from 'lucide-react';
 
 interface GameBoardProps {
   initialPlayers: Player[];
   onNewGame: () => void;
+}
+
+function InitialDealView({ players }: { players: Player[] }) {
+  return (
+    <Card className="shadow-lg">
+      <CardHeader>
+        <CardTitle className="text-2xl flex items-center">
+          <Shuffle className="mr-2 h-7 w-7 text-primary" />
+          Initial Deal: Player Hands
+        </CardTitle>
+        <CardDescription>Each player starts with 6 cards. Deck status is below.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {players.map(player => (
+            <div key={player.id} className="p-4 border rounded-lg bg-card/50">
+              <h3 className="text-lg font-semibold text-primary mb-2">{player.name}'s Hand</h3>
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Image 
+                    key={i} 
+                    src="https://placehold.co/60x90.png" 
+                    alt="Face-down card" 
+                    width={60}
+                    height={90} 
+                    className="rounded shadow-md"
+                    data-ai-hint="card back" 
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function GameBoard({ initialPlayers, onNewGame }: GameBoardProps) {
@@ -26,6 +63,7 @@ export function GameBoard({ initialPlayers, onNewGame }: GameBoardProps) {
   const [stopperId, setStopperId] = useState<string | null>(null);
   const [cardsRemainingInDeck, setCardsRemainingInDeck] = useState(0);
   const [cardsInDiscardPile, setCardsInDiscardPile] = useState(0);
+  const [firstRoundScoresSubmitted, setFirstRoundScoresSubmitted] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -33,11 +71,12 @@ export function GameBoard({ initialPlayers, onNewGame }: GameBoardProps) {
     setCurrentRound(1);
     setGameStatus('playing');
     setStopperId(null);
+    setFirstRoundScoresSubmitted(false); // Reset for new game
 
     const numPlayers = initialPlayers.length;
     if (numPlayers > 0) {
       const initialDeckSize = 108; // Typically 2 decks (52 cards each) + 4 jokers
-      const cardsDealtPerPlayer = 11; // Common dealing for Sixes
+      const cardsDealtPerPlayer = 6; // Each player gets 6 cards
       const remainingInDeck = initialDeckSize - (numPlayers * cardsDealtPerPlayer);
       setCardsRemainingInDeck(remainingInDeck > 0 ? remainingInDeck : 0);
       setCardsInDiscardPile(0); 
@@ -63,6 +102,10 @@ export function GameBoard({ initialPlayers, onNewGame }: GameBoardProps) {
         totalScore: updatedTotalScore,
       };
     });
+
+    if (currentRound === 1 && !firstRoundScoresSubmitted) {
+      setFirstRoundScoresSubmitted(true);
+    }
 
     if (gameStatus === 'final_round') {
       const finalPlayersWithBonuses = applyStopBonusesAndPenalties(updatedPlayers, stopperId);
@@ -107,6 +150,7 @@ export function GameBoard({ initialPlayers, onNewGame }: GameBoardProps) {
     const winner = players.reduce((prev, curr) => (curr.totalScore < prev.totalScore ? curr : prev), players[0]);
     return (
       <div className="space-y-6">
+        {/* Scoreboard for game over uses currentRound - 1, which is correct as currentRound was the final round number */}
         <Scoreboard players={players} currentRound={currentRound -1} />
         <Card className="text-center shadow-xl bg-gradient-to-r from-primary to-accent text-primary-foreground">
           <CardHeader>
@@ -129,44 +173,56 @@ export function GameBoard({ initialPlayers, onNewGame }: GameBoardProps) {
 
   return (
     <div className="space-y-8">
-      <Scoreboard players={players} currentRound={currentRound} />
+      {(!firstRoundScoresSubmitted && currentRound === 1 && gameStatus === 'playing') && (
+        <InitialDealView players={players} />
+      )}
 
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl flex items-center">
-            <Layers className="mr-2 h-7 w-7 text-primary" />
-            Deck & Discard Status
-          </CardTitle>
-          <CardDescription>Track the cards in play. This information is used by the AI Advisor.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-1">
-            <Label htmlFor="cardsRemainingInDeck" className="font-medium">Cards Remaining in Deck</Label>
-            <Input
-              id="cardsRemainingInDeck"
-              type="number"
-              value={cardsRemainingInDeck}
-              onChange={(e) => setCardsRemainingInDeck(Math.max(0, parseInt(e.target.value, 10) || 0))}
-              className="text-base h-12"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="cardsInDiscardPile" className="font-medium">Cards in Discard Pile</Label>
-            <Input
-              id="cardsInDiscardPile"
-              type="number"
-              value={cardsInDiscardPile}
-              onChange={(e) => setCardsInDiscardPile(Math.max(0, parseInt(e.target.value, 10) || 0))}
-              className="text-base h-12"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      {/* Scoreboard: Show if first round scores are in, and game is not yet over */}
+      {(firstRoundScoresSubmitted && gameStatus !== 'game_over') && (
+        // currentRound state is the *next* round to be played, so currentRound - 1 is the last completed round
+        <Scoreboard players={players} currentRound={currentRound - 1} />
+      )}
+
+      {/* Deck & Discard Status: Always show once game starts (initialPlayers are set) */}
+      {players.length > 0 && (
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-2xl flex items-center">
+                <Layers className="mr-2 h-7 w-7 text-primary" />
+                Deck & Discard Status
+              </CardTitle>
+              <CardDescription>Track the cards in play. This information is used by the AI Advisor.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1">
+                <Label htmlFor="cardsRemainingInDeck" className="font-medium">Cards Remaining in Deck</Label>
+                <Input
+                  id="cardsRemainingInDeck"
+                  type="number"
+                  value={cardsRemainingInDeck}
+                  onChange={(e) => setCardsRemainingInDeck(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  className="text-base h-12"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="cardsInDiscardPile" className="font-medium">Cards in Discard Pile</Label>
+                <Input
+                  id="cardsInDiscardPile"
+                  type="number"
+                  value={cardsInDiscardPile}
+                  onChange={(e) => setCardsInDiscardPile(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  className="text-base h-12"
+                />
+              </div>
+            </CardContent>
+          </Card>
+      )}
+
 
       {gameStatus !== 'game_over' && (
         <RoundScoreForm
           players={players}
-          currentRound={currentRound}
+          currentRound={currentRound} // This is the round number for which scores are being entered
           onSubmitScores={handleScoresSubmit}
           isFinalRound={gameStatus === 'final_round'}
         />
@@ -214,3 +270,4 @@ export function GameBoard({ initialPlayers, onNewGame }: GameBoardProps) {
     </div>
   );
 }
+
