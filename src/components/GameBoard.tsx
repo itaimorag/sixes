@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Player, GameState as GameStatusType, Card as CardType } from '@/lib/types';
+import type { Player, GameState as GameStatusType, Card as CardType, Suit, Rank } from '@/lib/types';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Scoreboard } from './Scoreboard';
@@ -14,6 +14,21 @@ import { useToast } from '@/hooks/use-toast';
 import { calculateNewTotalScore, applyStopBonusesAndPenalties } from '@/lib/game-logic';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Hand, Brain, RotateCcw, PartyPopper, Users, CheckSquare, Layers, Shuffle, HelpCircle } from 'lucide-react';
+
+// Helper functions for card names
+const SUITS_MAP: Record<Suit, string> = { 'S': 'Spades', 'H': 'Hearts', 'D': 'Diamonds', 'C': 'Clubs' };
+const RANKS_MAP: Record<Rank, string> = { 'A': 'Ace', 'K': 'King', 'Q': 'Queen', 'J': 'Jack', 'T': 'Ten', '9': '9', '8': '8', '7': '7', '6': '6', '5': '5', '4': '4', '3': '3', '2': '2' };
+
+function getRankName(rank: Rank | 'JOKER'): string {
+  if (rank === 'JOKER') return 'Joker';
+  return RANKS_MAP[rank];
+}
+
+function getSuitName(suit: Suit | 'JOKER'): string {
+  if (suit === 'JOKER') return ''; // Jokers don't have a suit name in "Ace of Spades" sense
+  return SUITS_MAP[suit];
+}
+
 
 interface PlayerHandDisplayProps {
   players: Player[];
@@ -28,7 +43,7 @@ function PlayerHandsDisplay({ players, currentPlayerId }: PlayerHandDisplayProps
           <Shuffle className="mr-2 h-7 w-7 text-primary" />
           Player Hands
         </CardTitle>
-        <CardDescription>Each player has 6 cards. Your cards are shown face up.</CardDescription>
+        <CardDescription>Each player has 6 cards. Your cards are shown face up. Others are face down.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -38,18 +53,32 @@ function PlayerHandsDisplay({ players, currentPlayerId }: PlayerHandDisplayProps
               <div className="flex flex-wrap gap-2">
                 {(player.hand || []).map((card, i) => {
                   const isCurrentPlayerCard = player.id === currentPlayerId;
-                  // Placeholder for card front. For actual game, use card specific images.
-                  const cardImageSrc = isCurrentPlayerCard ? "https://placehold.co/60x90/fafafa/333333.png" : "https://placehold.co/60x90.png";
-                  const cardAltText = isCurrentPlayerCard ? `Your card ${i + 1} (ID: ${card.id})` : `${player.name}'s face-down card ${i + 1}`;
-                  const dataAiHint = isCurrentPlayerCard ? "card front" : "card back";
+                  // For current player, use card.imageSrc (placeholder for now). For others, use a generic card back.
+                  const cardImageSrc = isCurrentPlayerCard ? card.imageSrc : "https://placehold.co/70x100.png";
+                  const cardAltText = isCurrentPlayerCard ? card.name : `${player.name}'s face-down card ${i + 1}`;
+                  
+                  let dataAiHint = "card back";
+                  if (isCurrentPlayerCard) {
+                    if (card.rank === 'JOKER') {
+                      dataAiHint = "joker card";
+                    } else {
+                      // Ensure two words max for data-ai-hint
+                      const rankHint = getRankName(card.rank).toLowerCase().split(' ')[0];
+                      const suitHint = getSuitName(card.suit).toLowerCase().split(' ')[0];
+                      dataAiHint = `${rankHint} ${suitHint}`.trim();
+                      if (dataAiHint.split(' ').length > 2) { // Fallback if somehow more than 2 words
+                        dataAiHint = rankHint;
+                      }
+                    }
+                  }
                   
                   return (
                     <Image 
                       key={card.id} 
                       src={cardImageSrc} 
                       alt={cardAltText}
-                      width={60}
-                      height={90} 
+                      width={70} // Updated card width
+                      height={100} // Updated card height
                       className="rounded shadow-md"
                       data-ai-hint={dataAiHint}
                     />
@@ -57,11 +86,11 @@ function PlayerHandsDisplay({ players, currentPlayerId }: PlayerHandDisplayProps
                 })}
                 {(!player.hand || player.hand.length === 0) && Array.from({ length: 6 }).map((_, i) => (
                      <Image 
-                        key={`empty-${i}`} 
-                        src="https://placehold.co/60x90.png" 
+                        key={`empty-${player.id}-${i}`} 
+                        src="https://placehold.co/70x100.png" 
                         alt="Face-down card placeholder" 
-                        width={60}
-                        height={90} 
+                        width={70}
+                        height={100} 
                         className="rounded shadow-md opacity-50"
                         data-ai-hint="card back"
                     />
@@ -70,14 +99,13 @@ function PlayerHandsDisplay({ players, currentPlayerId }: PlayerHandDisplayProps
             </div>
           ))}
         </div>
-        {/* Basic instructions for next steps (to be implemented by user with sockets) */}
         <Card className="mt-6 bg-primary/10 border-primary/30">
           <CardHeader>
             <CardTitle className="text-xl flex items-center"><HelpCircle className="mr-2 h-6 w-6 text-primary" />Next Steps (Multiplayer)</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-1">
-            <p>The game is now set up for basic multiplayer hand display.</p>
-            <p>To continue, you'll need to implement backend WebSocket logic for:</p>
+            <p>Card display is set up for individual player views using placeholder images. You'll need to replace the `imageSrc` in `createStandard52Deck` (or a similar function for a 108-card deck) with actual URLs to your card images.</p>
+            <p>To continue with multiplayer, you'll need to implement backend WebSocket logic for:</p>
             <ul className="list-disc list-inside pl-4">
               <li>Managing turns.</li>
               <li>Handling card drawing (from deck or discard pile).</li>
@@ -98,10 +126,49 @@ interface GameBoardProps {
   currentPlayerId: string | null;
 }
 
-// Generates a deck of cards
-function createDeck(deckSize: number = 108): CardType[] {
-  return Array.from({ length: deckSize }, (_, i) => ({ id: `card-${i + 1}` }));
+const SUITS: Suit[] = ['S', 'H', 'D', 'C'];
+const RANKS: Rank[] = ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K'];
+
+// Generates a standard 52-card deck
+function createStandard52Deck(): CardType[] {
+  const deck: CardType[] = [];
+  let cardCount = 0;
+  for (const suit of SUITS) {
+    for (const rank of RANKS) {
+      cardCount++;
+      const cardName = `${getRankName(rank)} of ${getSuitName(suit)}`;
+      deck.push({
+        // id: `${suit}${rank}-${cardCount}`, // Simpler ID for unique card type
+        id: `card-${suit}${rank}-${Date.now()}-${Math.random().toString(36).substring(7)}`, // Unique ID for card instance
+        suit,
+        rank,
+        name: cardName,
+        // Replace this placeholder with your actual image URL for each card
+        imageSrc: `https://placehold.co/70x100.png`, 
+      });
+    }
+  }
+  return deck;
 }
+
+/*
+// Optional: For a full Sixes game, you'd typically use 108 cards (2 standard decks + 4 Jokers)
+// You can adapt this function if you want to use 108 cards.
+function createSixesDeck(): CardType[] {
+  const deck1 = createStandard52Deck().map(card => ({...card, id: `deck1-${card.id}`})); // Ensure unique IDs
+  const deck2 = createStandard52Deck().map(card => ({...card, id: `deck2-${card.id}`})); // Ensure unique IDs
+  const jokers: CardType[] = Array.from({ length: 4 }, (_, i) => ({
+    id: `JOKER${i + 1}-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+    suit: 'JOKER',
+    rank: 'JOKER',
+    name: `Joker ${i + 1}`,
+    // Replace this placeholder with your actual image URL for Jokers
+    imageSrc: `https://placehold.co/70x100.png`, 
+  }));
+  return [...deck1, ...deck2, ...jokers]; // 104 + 4 = 108 cards
+}
+*/
+
 
 // Shuffles a deck of cards
 function shuffleDeck(deck: CardType[]): CardType[] {
@@ -120,15 +187,16 @@ export function GameBoard({ initialPlayers, onNewGame, currentPlayerId }: GameBo
   const [gameStatus, setGameStatus] = useState<GameStatusType>('playing');
   const [stopperId, setStopperId] = useState<string | null>(null);
   const [mainDeck, setMainDeck] = useState<CardType[]>([]);
-  const [cardsRemainingInDeck, setCardsRemainingInDeck] = useState(0); // This will be derived from mainDeck.length
-  const [cardsInDiscardPile, setCardsInDiscardPile] = useState(0); // This will be its own state, or an array of CardType[]
+  const [cardsRemainingInDeck, setCardsRemainingInDeck] = useState(0); 
+  const [cardsInDiscardPile, setCardsInDiscardPile] = useState(0); 
   const [firstRoundScoresSubmitted, setFirstRoundScoresSubmitted] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     // Initialize game: deal cards, set up deck
-    const initialDeckSize = 108;
-    let deck = shuffleDeck(createDeck(initialDeckSize));
+    // Using a 52-card deck as per the image request. 
+    // For a full Sixes game, you might use createSixesDeck() (108 cards).
+    let deck = shuffleDeck(createStandard52Deck()); 
     
     const updatedPlayers = initialPlayers.map(player => {
       const hand = deck.splice(0, 6); // Deal 6 cards
@@ -138,14 +206,14 @@ export function GameBoard({ initialPlayers, onNewGame, currentPlayerId }: GameBo
     setPlayers(updatedPlayers);
     setMainDeck(deck);
     setCardsRemainingInDeck(deck.length);
-    setCardsInDiscardPile(0); // Assuming discard pile starts empty
+    setCardsInDiscardPile(0); 
 
     setCurrentRound(1);
     setGameStatus('playing');
     setStopperId(null);
     setFirstRoundScoresSubmitted(false);
 
-  }, [initialPlayers, currentPlayerId]); // Rerun if initialPlayers changes (new game) or currentPlayerId (could imply UI refresh)
+  }, [initialPlayers, currentPlayerId]); 
 
 
   const handleScoresSubmit = (roundScores: Record<string, number>) => {
@@ -191,8 +259,6 @@ export function GameBoard({ initialPlayers, onNewGame, currentPlayerId }: GameBo
   };
 
   const handleCallStop = (playerId: string) => {
-    // This action would eventually be sent to the server
-    // For now, update local state
     if (gameStatus === 'playing') {
       setPlayers(prevPlayers => prevPlayers.map(p => p.id === playerId ? {...p, isStopper: true} : p));
       setStopperId(playerId);
@@ -237,13 +303,10 @@ export function GameBoard({ initialPlayers, onNewGame, currentPlayerId }: GameBo
 
   return (
     <div className="space-y-8">
-      {/* Display player hands based on currentPlayerId */}
-      {gameStatus === 'playing' && (!firstRoundScoresSubmitted || currentRound ===1) && (
+      {(gameStatus === 'playing' && (!firstRoundScoresSubmitted || currentRound ===1)) && (
          <PlayerHandsDisplay players={players} currentPlayerId={currentPlayerId} />
       )}
 
-
-      {/* Scoreboard: Show if first round scores are in, and game is not yet over */}
       {(firstRoundScoresSubmitted && gameStatus !== 'game_over') && (
         <Scoreboard players={players} currentRound={currentRound - 1} />
       )}
@@ -255,16 +318,16 @@ export function GameBoard({ initialPlayers, onNewGame, currentPlayerId }: GameBo
                 <Layers className="mr-2 h-7 w-7 text-primary" />
                 Deck & Discard Status
               </CardTitle>
-              <CardDescription>Track the cards in play. This information is used by the AI Advisor. Deck count is automatically updated after dealing.</CardDescription>
+              <CardDescription>Track the cards in play. This information is used by the AI Advisor. Deck count is automatically updated after dealing from a 52-card deck.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1">
-                <Label htmlFor="cardsRemainingInDeck" className="font-medium">Cards Remaining in Deck (Main Deck)</Label>
+                <Label htmlFor="cardsRemainingInDeck" className="font-medium">Cards Remaining in Deck</Label>
                 <Input
                   id="cardsRemainingInDeck"
                   type="number"
-                  value={cardsRemainingInDeck} // Derived from mainDeck state
-                  readOnly // This is now managed by dealing logic
+                  value={cardsRemainingInDeck} 
+                  readOnly 
                   className="text-base h-12 bg-muted/50"
                 />
               </div>
@@ -274,7 +337,6 @@ export function GameBoard({ initialPlayers, onNewGame, currentPlayerId }: GameBo
                   id="cardsInDiscardPile"
                   type="number"
                   value={cardsInDiscardPile}
-                  // onChange for discard pile would be part of socket-based game actions
                   onChange={(e) => setCardsInDiscardPile(Math.max(0, parseInt(e.target.value, 10) || 0))}
                   className="text-base h-12"
                 />
@@ -308,7 +370,7 @@ export function GameBoard({ initialPlayers, onNewGame, currentPlayerId }: GameBo
                   onClick={() => handleCallStop(player.id)} 
                   variant="destructive" 
                   className="flex-grow"
-                  disabled={gameStatus !== 'playing' || player.id !== currentPlayerId} // Only current player can call STOP for themselves
+                  disabled={gameStatus !== 'playing' || player.id !== currentPlayerId} 
                   title={player.id !== currentPlayerId ? "You can only call STOP for yourself" : "Call STOP"}
                 >
                   <Hand className="mr-2 h-4 w-4" /> Call STOP

@@ -1,8 +1,15 @@
+
 import type { StopAdviceInput } from '@/ai/flows/stop-advisor';
 
+export type Suit = 'S' | 'H' | 'D' | 'C'; // Spades, Hearts, Diamonds, Clubs
+export type Rank = 'A' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'T' | 'J' | 'Q' | 'K'; // Ace, 2-10, Jack, Queen, King (T for Ten)
+
 export interface Card {
-  id: string; // Unique identifier for the card, e.g., "card-1", "H7"
-  // Add other properties like value, suit, image URL as needed later
+  id: string; // Unique identifier for the card instance
+  suit: Suit | 'JOKER'; // JOKER for jokers
+  rank: Rank | 'JOKER'; // JOKER for jokers
+  name: string; // e.g., "Ace of Spades", "Joker"
+  imageSrc: string; // URL to the card's front image
 }
 
 export interface Player {
