@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 export const metadata: Metadata = {
   title: 'Sixes Scorecard',
   description: 'Track scores for the Shishiyot (Sixes) card game.',
+  // Adding viewport meta for better mobile responsiveness, though not strictly required by prompt
+  viewport: 'width=device-width, initial-scale=1',
 };
 
 export default function RootLayout({
