@@ -95,19 +95,25 @@ export interface GameContext {
 }
 
 export interface ServerToClientEvents {
-  playerJoined: (players: Player[]) => void;
+  lobbyCreated: (players: Player[]) => void;
+  allPlayersClaimed: (players: Player[]) => void;
   gameStarted: (gameState: GameState) => void;
-  playerClaimed: (players: Player[]) => void;
+  isFirstPlayer: (isFirst: boolean) => void;
+  playersUpdate: (players: Player[]) => void;
+  gameStarting: () => void;
 }
 
 export interface ClientToServerEvents {
-  joinGame: (roomId: string, player: Player) => void;
-  startGame: () => void;
-  addPlayer: (roomId: string, player: Player) => void;
+  createLobby: (roomId: string, playerNames: string[]) => void;
+  joinLobby: (roomId: string) => void;
   claimPlayer: (roomId: string, playerId: string) => void;
+  startGame: () => void;
   viewBottomRow: () => void;
   drawFromDeck: () => void;
   drawFromDiscard: () => void;
   swapCard: (cardIndex: number) => void;
   callStop: () => void;
+  checkFirstPlayer: (roomId: string) => void;
+  setupGame: (roomId: string, playerNames: string[]) => void;
+  selectName: (roomId: string, name: string) => void;
 }

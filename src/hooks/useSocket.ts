@@ -35,9 +35,8 @@ export function useSocket(roomId: string, initialPlayer: Player) {
 
   useEffect(() => {
     // Initialize socket connection with the correct path
-    socketRef.current = io({
-      path: "/api/socket",
-      addTrailingSlash: false,
+    socketRef.current = io("http://localhost:3001", {
+      transports: ["websocket"],
     });
 
     // Join game room

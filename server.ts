@@ -1,7 +1,7 @@
 import { createServer } from "http";
 import next from "next";
 import { Server } from "socket.io";
-import { registerGameHandlers } from "./src/server/gameSocketHandlers";
+const { setupGameHandlers } = require("./src/server/gameSocketHandlers");
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
@@ -22,7 +22,7 @@ app.prepare().then(() => {
 
   io.on("connection", (socket) => {
     console.log("Client connected:", socket.id);
-    registerGameHandlers(io, socket);
+    setupGameHandlers(io, socket);
   });
 
   server
